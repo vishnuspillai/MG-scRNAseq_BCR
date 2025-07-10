@@ -10,6 +10,7 @@
 
 # Ignore raw data folders
 data/
+results/
 
 # RStudio stuff
 .Rhistory
