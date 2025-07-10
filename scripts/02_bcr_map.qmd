@@ -1,0 +1,38 @@
+```{r}
+install.packages("tidyverse")
+```
+
+
+```{r}
+library(Seurat)
+library(scRepertoire)
+library(tidyverse)
+
+# Define sample IDs and paths
+samples <- paste0("MG", 1:12)
+bcr_paths <- paste0("D:/MG-scRNAseq_BCR/data/bcr/", 1:12, "_", samples, "_BCR.csv")
+
+# Read each BCR file
+contig_list <- lapply(bcr_paths, read.csv)
+names(contig_list) <- samples
+
+# Combine BCR data
+combined_bcr <- combineBCR(contig_list, samples = samples, ID = "sample_id")
+
+# Load annotated Seurat object
+b_cells <- readRDS("D:/MG-scRNAseq_BCR/results/Bcells_annotated_seurat_obj.rds")
+
+# Merge clone info with Seurat object
+b_cells <- combineExpression(
+  combined_bcr,
+  b_cells,
+  cloneCall = "raw_clonotype_id",
+  groupBy = "Bcell_type"
+)
+
+# Save the new object
+saveRDS(b_cells, "D:/MG-scRNAseq_BCR/results/Bcells_clonemapped_seurat_obj.rds")
+
+
+```
+

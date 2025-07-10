@@ -1,0 +1,152 @@
+```{r}
+# Load libraries
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+
+# Load filtered full object
+seurat_obj <- readRDS("D:/MG-scRNAseq_BCR/results/full_seurat_obj.rds")
+
+# 👇 STEP 1: B cell extraction
+# NOTE: Replace "B cells" if your metadata uses different labeling
+Idents(seurat_obj) <- "sample_id"  # Or replace with 'celltype' if you have annotations
+
+# You may need to first identify B cells via gene expression (CD19, MS4A1 etc.)
+# For now, let's assume you labeled them already:
+# If not, we can do manual selection later.
+
+# ❗ Temporary manual filtering using marker expression (fallback)
+b_markers <- c("CD79A", "CD79B", "MS4A1", "CD19")
+seurat_obj <- NormalizeData(seurat_obj)
+seurat_obj <- FindVariableFeatures(seurat_obj)
+seurat_obj <- ScaleData(seurat_obj)
+seurat_obj <- RunPCA(seurat_obj)
+seurat_obj <- RunUMAP(seurat_obj, dims = 1:20)
+
+FeaturePlot(seurat_obj, features = b_markers, reduction = "umap")
+
+# 🔁 Subset B cells using marker expression (customizable)
+b_cells <- subset(seurat_obj, subset = CD79A > 1 & MS4A1 > 1)
+
+# 🧼 Normalize and scale
+b_cells <- NormalizeData(b_cells)
+b_cells <- FindVariableFeatures(b_cells)
+b_cells <- ScaleData(b_cells)
+b_cells <- RunPCA(b_cells)
+b_cells <- RunUMAP(b_cells, dims = 1:20)
+b_cells <- FindNeighbors(b_cells, dims = 1:20)
+b_cells <- FindClusters(b_cells, resolution = 0.3)
+
+# 📊 UMAP plot
+dir.create("D:/MG-scRNAseq_BCR/figures/umaps", recursive = TRUE, showWarnings = FALSE)
+p <- DimPlot(b_cells, reduction = "umap", label = TRUE, group.by = "seurat_clusters") +
+  ggtitle("B Cell Subclusters")
+ggsave("D:/MG-scRNAseq_BCR/figures/umaps/Bcell_UMAP.png", p, width = 8, height = 6)
+
+
+# Join layers explicitly to allow DE testing
+# Set RNA assay
+DefaultAssay(b_cells) <- "RNA"
+
+# Set cluster identities explicitly (this fixes FindAllMarkers behavior)
+
+
+# Force JoinLayers ONLY IF needed (Seurat v5+)
+
+# Force flattening of RNA assay across samples
+b_cells[["RNA"]] <- JoinLayers(b_cells[["RNA"]])
+Idents(b_cells) <- b_cells$seurat_clusters
+# 🧬 Cluster markers
+# Rerun with relaxed thresholds
+markers <- FindAllMarkers(
+  b_cells,
+  only.pos = TRUE,
+  min.pct = 0.1,          # Lowered from 0.25
+  logfc.threshold = 0.1   # Lowered from 0.25
+)
+
+# Save again
+write.csv(markers, "D:/MG-scRNAseq_BCR/results/tables/Bcell_cluster_markers.csv", row.names = FALSE)
+
+# Check top genes
+head(markers)
+
+# Save markers table
+dir.create("D:/MG-scRNAseq_BCR/results/tables", recursive = TRUE, showWarnings = FALSE)
+write.csv(markers, "D:/MG-scRNAseq_BCR/results/tables/Bcell_cluster_markers.csv", row.names = FALSE)
+
+# 💾 Save Seurat object
+dir.create("D:/MG-scRNAseq_BCR/results", showWarnings = FALSE)
+saveRDS(b_cells, file = "D:/MG-scRNAseq_BCR/results/Bcells_seurat_obj.rds")
+
+# ✅ Cell count per cluster
+print(table(Idents(b_cells)))
+
+```
+
+```{r}
+marker_panels <- list(
+  "Naive B"     = c("IGHD", "TCL1A", "IL4R"),
+  "Memory B"    = c("CD27", "TNFRSF13B", "CD80"),
+  "Plasma B"    = c("XBP1", "MZB1", "PRDM1", "SDC1", "JCHAIN"),
+  "Activated B" = c("CD86", "CD69", "IRF4"),
+  "Cycling B"   = c("MKI67", "TOP2A", "PCNA")
+)
+
+# Load Seurat if needed
+library(Seurat)
+library(patchwork)
+
+# Create a feature plot per panel
+for (label in names(marker_panels)) {
+  features <- marker_panels[[label]]
+  p <- VlnPlot(b_cells, features = features, group.by = "seurat_clusters", pt.size = 0.1, combine = TRUE) +
+    plot_annotation(title = label)
+  print(p)
+}
+
+cluster_labels <- c(
+  "0" = "Naive B",
+  "1" = "Memory B",
+  "2" = "Plasma B",
+  "3" = "Cycling B",
+  "4" = "Activated B",
+  "5" = "Memory B",
+  "6" = "Plasma B",
+  "7" = "Unknown"
+)
+
+# Get cluster IDs
+cluster_ids <- as.character(Idents(b_cells))
+
+# Create annotation vector for each cell
+bcell_type_vector <- cluster_labels[cluster_ids]
+
+# Assign it manually to metadata using cell names
+b_cells@meta.data$Bcell_type <- bcell_type_vector
+
+
+# Annotated subtype UMAP
+umap_type <- DimPlot(
+  b_cells,
+  reduction = "umap",
+  group.by = "Bcell_type",
+  label = TRUE
+) + ggtitle("B Cell Subtypes")
+
+# Print it to ensure rendering
+print(umap_type)
+
+# Then save it
+ggsave(
+  filename = "D:/MG-scRNAseq_BCR/figures/umaps/umapsx/Bcell_types.png",
+  plot = umap_type,
+  width = 8,
+  height = 6
+)
+
+
+saveRDS(b_cells, "D:/MG-scRNAseq_BCR/results/Bcells_annotated_seurat_obj.rds")
+
+```
+

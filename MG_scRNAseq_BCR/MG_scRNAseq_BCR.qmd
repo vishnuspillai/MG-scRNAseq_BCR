@@ -1,11 +1,78 @@
----
-title: "MG_scRNAseq_BCR"
----
-
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+```{r}
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+remotes::install_github("mojaveazure/seurat-disk")
+```
 
 ```{r}
-1 + 1
+# Load libraries
+library(Seurat)
+library(SeuratDisk)
+library(dplyr)
+library(ggplot2)
+
+# Define file paths
+samples <- paste0("MG", 1:12)
+filenames <- c(
+  "GSM7408918_MG1.h5",  "GSM7408919_MG2.h5",  "GSM7408920_MG3.h5",
+  "GSM7408922_MG4.h5",  "GSM7408923_MG5.h5",  "GSM7408924_MG6.h5",
+  "GSM7408925_MG7.h5",  "GSM7408926_MG8.h5",  "GSM7408927_MG9.h5",
+  "GSM7408928_MG10.h5", "GSM7408929_MG11.h5", "GSM7408930_MG12.h5"
+)
+path_prefix <- "D:/MG-scRNAseq_BCR/data/scrna/"
+file_paths <- paste0(path_prefix, filenames)
+
+# Load and merge
+seurat_list <- list()
+for (i in seq_along(samples)) {
+  sample <- samples[i]
+  file <- file_paths[i]
+  message("Reading: ", file)
+  data <- Read10X_h5(file)
+  seurat_obj <- CreateSeuratObject(counts = data, project = sample, min.cells = 3, min.features = 200)
+  seurat_obj$sample_id <- sample
+  seurat_list[[sample]] <- seurat_obj
+}
+
+combined <- merge(seurat_list[[1]], y = seurat_list[-1], add.cell.ids = samples)
+
+# QC metrics
+combined[["percent.mt"]] <- PercentageFeatureSet(combined, pattern = "^MT-")
+
+# Create results directory if missing
+qc_dir <- "D:/MG-scRNAseq_BCR/figures/qc"
+dir.create(qc_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Violin plot
+pdf(file.path(qc_dir, "QC_ViolinPlots_raw.pdf"), width = 10, height = 6)
+VlnPlot(combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+        ncol = 3, pt.size = 0.1) +
+  ggtitle("Raw QC Metrics: Before Filtering")
+dev.off()
+
+# Feature scatter
+pdf(file.path(qc_dir, "QC_FeatureScatter_raw.pdf"), width = 12, height = 6)
+FeatureScatter(combined, feature1 = "nCount_RNA", feature2 = "percent.mt")
+FeatureScatter(combined, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+dev.off()
+
+# Filtering
+combined <- subset(combined,
+                   subset = nFeature_RNA > 300 &
+                            nFeature_RNA < 6000 &
+                            percent.mt < 10)
+
+# Create processed data folder if missing
+processed_dir <- "D:/MG-scRNAseq_BCR/results/"
+dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Save filtered object
+saveRDS(combined, file = file.path(processed_dir, "full_seurat_obj.rds"))
+
+# Optional: print number of retained cells
+message("✅ Cells after filtering: ", ncol(combined))
+
+
 ```
+
