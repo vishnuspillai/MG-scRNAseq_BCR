@@ -4,34 +4,79 @@ install.packages("tidyverse")
 
 
 ```{r}
+# ========================
+# STEP 2: BCR Integration
+# Author: Vishnu S. Pillai
+# ========================
+
 library(Seurat)
 library(scRepertoire)
 library(tidyverse)
 
-# Define sample IDs and paths
-samples <- paste0("MG", 1:12)
-bcr_paths <- paste0("D:/MG-scRNAseq_BCR/data/bcr/", 1:12, "_", samples, "_BCR.csv")
+#---------------------------
+# 1. Load Seurat Object
+#---------------------------
+seurat_path <- "D:/MG-scRNAseq_BCR/results/Bcells_annotated_seurat_obj.rds"
+b_cells <- readRDS(seurat_path)
 
-# Read each BCR file
-contig_list <- lapply(bcr_paths, read.csv)
+#---------------------------
+# 2. Load BCR Files
+#---------------------------
+samples <- paste0("MG", 1:12)
+geo_ids <- 931:943
+bcr_files <- paste0("D:/MG-scRNAseq_BCR/data/bcr/", geo_ids, "_", samples, "_BCR.csv")
+
+# Load as named list
+contig_list <- lapply(bcr_files, read.csv)
 names(contig_list) <- samples
 
-# Combine BCR data
+#---------------------------
+# 3. Combine BCR Data
+#---------------------------
 combined_bcr <- combineBCR(contig_list, samples = samples, ID = "sample_id")
 
-# Load annotated Seurat object
-b_cells <- readRDS("D:/MG-scRNAseq_BCR/results/Bcells_annotated_seurat_obj.rds")
-
-# Merge clone info with Seurat object
+#---------------------------
+# 4. Merge BCR with Seurat
+#---------------------------
 b_cells <- combineExpression(
   combined_bcr,
+  b_cells,
+  cloneCall = "raw_clonotype_id",
+  groupBy = "Bcell_type"  # previously defined annotation
+)
+
+# Save new object
+saveRDS(b_cells, "D:/MG-scRNAseq_BCR/results/Bcells_clonemapped_seurat_obj.rds")
+
+#---------------------------
+# 5. Clone Overlay UMAP
+#---------------------------
+dir.create("D:/MG-scRNAseq_BCR/figures/clones", recursive = TRUE, showWarnings = FALSE)
+
+p1 <- clonalOverlay(
+  b_cells,
+  reduction = "umap",
+  cloneCall = "raw_clonotype_id"
+) + ggtitle("BCR Clone Distribution in B Cells")
+
+ggsave("D:/MG-scRNAseq_BCR/figures/clones/Bcell_clone_overlay.png", p1, width = 8, height = 6)
+
+#---------------------------
+# 6. Clonal Expansion Stats
+#---------------------------
+dir.create("D:/MG-scRNAseq_BCR/results/tables", recursive = TRUE, showWarnings = FALSE)
+
+clone_stats <- clonalHomeostasis(
   b_cells,
   cloneCall = "raw_clonotype_id",
   groupBy = "Bcell_type"
 )
 
-# Save the new object
-saveRDS(b_cells, "D:/MG-scRNAseq_BCR/results/Bcells_clonemapped_seurat_obj.rds")
+write.csv(
+  clone_stats,
+  "D:/MG-scRNAseq_BCR/results/tables/Bcell_clone_stats.csv",
+  row.names = FALSE
+)
 
 
 ```
