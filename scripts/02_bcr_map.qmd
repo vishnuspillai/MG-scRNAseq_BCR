@@ -112,47 +112,41 @@ write.csv(clone_counts, "D:/MG-scRNAseq_BCR/results/tables/Bcell_clone_stats.csv
 ```
 ```{r}
 #| label: Clonotype chunk with labeling umaps
-library(ggplot2)
-library(dplyr)
+library(scales)
 
-#------------------------------------------
-# 1. Identify Top 10 Expanded Clonotypes
-#------------------------------------------
-top_clones <- b_cells@meta.data %>%
-  count(raw_clonotype_id, sort = TRUE) %>%
-  slice_head(n = 10) %>%
-  pull(raw_clonotype_id)
+# Define top clone list from your data
+top_clones <- c("clonotype2", "clonotype1", "clonotype3", "clonotype4", 
+                "clonotype6", "clonotype13", "clonotype17", 
+                "clonotype7", "clonotype18")
 
-#------------------------------------------
-# 2. Label Top Clones, Rest as "Other"
-#------------------------------------------
+# Force clone label order
 b_cells$clone_label <- ifelse(
   b_cells$raw_clonotype_id %in% top_clones,
   b_cells$raw_clonotype_id,
   "Other"
 )
+b_cells$clone_label <- factor(b_cells$clone_label, levels = c(top_clones, "Other"))
 
-#------------------------------------------
-# 3. Prepare UMAP with Clone Labels
-#------------------------------------------
+# Build UMAP dataframe
 umap_df <- as.data.frame(Embeddings(b_cells, "umap"))
 umap_df$clone_label <- b_cells$clone_label
 
-# Optional: Clean up long strings for legend
-umap_df$clone_label <- factor(umap_df$clone_label)
+# Assign distinct colors
+clone_colors <- hue_pal()(length(top_clones))
+names(clone_colors) <- top_clones
+clone_colors["Other"] <- "gray70"
 
-#------------------------------------------
-# 4. Plot + Save UMAP with Legend
-#------------------------------------------
-p_top10 <- ggplot(umap_df, aes(x = umap_1, y = umap_2, color = clone_label)) +
-  geom_point(size = 1, alpha = 0.8) +
-  theme_minimal() +
-  ggtitle("Top 10 BCR Clones in B Cells") +
-  guides(color = guide_legend(override.aes = list(size = 3))) +
-  theme(legend.position = "right")
+# Plot UMAP
+p_final <- ggplot(umap_df, aes(x = umap_1, y = umap_2, color = clone_label)) +
+  geom_point(size = 1.1, alpha = 0.9) +
+  scale_color_manual(values = clone_colors) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "right") +
+  ggtitle("Top BCR Clones in B Cells") +
+  guides(color = guide_legend(override.aes = list(size = 4)))
 
-# Save image
-ggsave("D:/MG-scRNAseq_BCR/figures/clones/Bcell_clone_top10_legend.png", p_top10, width = 9, height = 6)
+# Save to file
+ggsave("D:/MG-scRNAseq_BCR/figures/clones/Bcell_clone_final.png", p_final, width = 10, height = 7)
 
 ```
 
