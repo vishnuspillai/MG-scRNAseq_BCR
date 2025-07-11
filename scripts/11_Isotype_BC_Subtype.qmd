@@ -1,0 +1,61 @@
+```{r}
+# Assume `expanded` is the BCR dataframe that contains 'barcode' and 'c_gene'
+
+# Ensure barcodes match format of Seurat
+expanded$barcode <- as.character(expanded$barcode)
+
+# Get only needed columns
+iso_map <- expanded[, c("barcode", "c_gene")]
+
+# Ensure matching barcodes exist
+iso_map <- iso_map[iso_map$barcode %in% colnames(b_cells), ]
+
+# Map into Seurat object
+b_cells$c_gene <- iso_map$c_gene[match(colnames(b_cells), iso_map$barcode)]
+
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+# Extract isotype
+b_cells$Isotype <- str_extract(b_cells$c_gene, "^IGH[AMDGE]")
+
+# Filter NAs
+iso_data <- b_cells@meta.data %>%
+  filter(!is.na(Isotype), !is.na(Bcell_type))
+
+# Count and normalize per subtype
+isotype_counts <- iso_data %>%
+  group_by(Bcell_type, Isotype) %>%
+  summarise(Count = n()) %>%
+  group_by(Bcell_type) %>%
+  mutate(Proportion = Count / sum(Count)) %>%
+  ungroup()
+
+# Save CSV
+write.csv(isotype_counts,
+          "D:/MG-scRNAseq_BCR/results/tables/Bcell_isotype_usage_table.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+# Plot
+ggplot(isotype_counts, aes(x = Bcell_type, y = Proportion, fill = Isotype)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  labs(
+    title = "Isotype Usage Across B Cell Subtypes",
+    y = "Proportion",
+    x = "B Cell Subtype"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Set2")
+
+# Save plot
+ggsave("D:/MG-scRNAseq_BCR/figures/clones/Bcell_isotype_usage.png", width = 8, height = 5)
+
+```

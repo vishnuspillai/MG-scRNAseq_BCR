@@ -1,0 +1,89 @@
+```{r}
+install.packages("gprofiler2")
+```
+
+```{r}
+# ===============================================
+# STEP 4B: GO Enrichment (GProfiler version)
+# Author: Vishnu S. Pillai
+# ===============================================
+
+library(gprofiler2)
+library(dplyr)
+
+# Input and output paths
+de_dir <- "D:/MG-scRNAseq_BCR/results/degs_by_clone/"
+out_dir_csv <- "D:/MG-scRNAseq_BCR/results/enrichment_by_clone/"
+out_dir_fig <- "D:/MG-scRNAseq_BCR/figures/enrichment_by_clone/"
+dir.create(out_dir_csv, recursive = TRUE, showWarnings = FALSE)
+dir.create(out_dir_fig, recursive = TRUE, showWarnings = FALSE)
+
+# Load DE files
+de_files <- list.files(de_dir, pattern = "DEGs_.*\\.csv", full.names = TRUE)
+
+for (csv_path in de_files) {
+  # Read DEG table
+  degs <- read.csv(csv_path, row.names = 1)
+  
+  # Filter for upregulated in Expanded clones
+  up_genes <- degs %>%
+    filter(avg_log2FC > 0.25, p_val_adj < 0.05) %>%
+    rownames()
+  
+  # Skip if too few
+  if (length(up_genes) < 5) {
+    message("⚠️ Skipped ", basename(csv_path), ": not enough DEGs")
+    next
+  }
+
+# Run gProfiler
+gost_res <- gost(
+  query = up_genes,
+  organism = "hsapiens",
+  sources = c("GO:BP"),
+  correction_method = "fdr"
+)
+
+# ❌ Skip if no results
+if (is.null(gost_res$result) || nrow(gost_res$result) == 0) {
+  message("⚠️ No GO terms found for ", subtype_name, " — skipping.")
+  next
+}
+
+
+  # Format and save table
+  subtype_name <- gsub("DEGs_|\\.csv", "", basename(csv_path))
+  result_df <- gost_res$result
+
+  # Convert list-columns to strings (safe for CSV export)
+  list_cols <- sapply(result_df, is.list)
+  result_df[list_cols] <- lapply(result_df[list_cols], function(x) sapply(x, toString))
+
+  write.csv(result_df, paste0(out_dir_csv, "GO_BP_", subtype_name, ".csv"), row.names = FALSE)
+
+  # Save top 10 as barplot
+  top_terms <- head(result_df, 10)
+  top_terms$p_value <- suppressWarnings(as.numeric(top_terms$p_value))
+  top_terms <- top_terms[!is.na(top_terms$p_value) & is.finite(top_terms$p_value) & top_terms$p_value > 0, ]
+
+  if (is.null(top_terms) || nrow(top_terms) == 0) {
+    message("⚠️ Skipped plot for ", subtype_name, ": no valid p-values")
+    next
+  }
+
+  png(filename = paste0(out_dir_fig, "GO_BP_barplot_", subtype_name, ".png"),
+      width = 1000, height = 800, res = 150)
+
+  barplot(
+    -log10(top_terms$p_value),
+    names.arg = top_terms$term_name,
+    las = 2,
+    col = "skyblue",
+    main = paste("Top GO:BP Terms -", gsub("_", " ", subtype_name)),
+    ylab = "-log10(p-value)"
+  )
+
+  dev.off()
+}
+
+```

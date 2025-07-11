@@ -1,0 +1,69 @@
+```{r}
+# ===============================
+# STEP 4A: Clone-Driven Heatmaps
+# Author: Vishnu S. Pillai
+# ===============================
+
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(pheatmap)
+
+# Load updated Seurat object
+b_cells <- readRDS("D:/MG-scRNAseq_BCR/results/Bcells_clonemapped_cloneStatus.rds")
+
+# Setup
+de_dir <- "D:/MG-scRNAseq_BCR/results/degs_by_clone/"
+plot_dir <- "D:/MG-scRNAseq_BCR/figures/degs_by_clone/"
+dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
+
+# List DEG CSVs
+de_files <- list.files(de_dir, pattern = "DEGs_.*\\.csv", full.names = TRUE)
+
+for (csv_path in de_files) {
+  
+  # Read DEG table
+  degs <- read.csv(csv_path, row.names = 1)
+  
+  # Get top 10 genes upregulated in Expanded
+  top_genes <- degs %>%
+    filter(avg_log2FC > 0, p_val_adj < 0.05) %>%
+    arrange(desc(avg_log2FC)) %>%
+    head(10) %>%
+    rownames()
+  
+  # Subset Seurat object to this subtype
+  subtype_name <- gsub("DEGs_|\\.csv", "", basename(csv_path))  # e.g., "Memory_B"
+  subtype_cells <- subset(b_cells, subset = Bcell_type == gsub("_", " ", subtype_name))
+  
+  # Extract raw expression
+  expr_matrix <- GetAssayData(subtype_cells, slot = "data")[top_genes, , drop = FALSE]
+
+  # Drop genes with all 0s or no variance
+  expr_matrix <- expr_matrix[rowSums(expr_matrix) > 0, , drop = FALSE]
+  expr_matrix <- expr_matrix[apply(expr_matrix, 1, function(x) sd(x) > 0), , drop = FALSE]
+
+  # Only proceed if >2 genes remain
+  if (nrow(expr_matrix) >= 3) {
+    scaled_matrix <- t(scale(t(as.matrix(expr_matrix))))
+    
+    # Save heatmap
+    pheatmap::pheatmap(
+      scaled_matrix,
+      cluster_rows = TRUE,
+      cluster_cols = TRUE,
+      show_colnames = FALSE,
+      fontsize_row = 10,
+      main = paste("Top Expanded Clone DEGs -", gsub("_", " ", subtype_name)),
+      filename = paste0(plot_dir, "Heatmap_", subtype_name, ".png"),
+      width = 8,
+      height = 6
+    )
+  } else {
+    message("⚠️ Skipped ", subtype_name, ": too few valid genes for heatmap.")
+  }
+}
+
+
+```
+

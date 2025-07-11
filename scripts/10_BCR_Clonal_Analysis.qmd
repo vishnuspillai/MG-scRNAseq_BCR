@@ -1,0 +1,46 @@
+```{r}
+library(igraph)
+library(ggraph)
+library(dplyr)
+
+```
+
+```{r}
+# Filter cells with defined CDR3 and Bcell type
+network_input <- expanded %>%
+  filter(!is.na(cdr3_nt), !is.na(Bcell_type)) %>%
+  distinct(barcode, cdr3_nt, Bcell_type)
+
+# Create edge list: same cdr3_nt means they are connected
+edges <- network_input %>%
+  inner_join(network_input, by = "cdr3_nt") %>%
+  filter(barcode.x != barcode.y) %>%
+  select(from = barcode.x, to = barcode.y)
+
+# Create vertex table
+vertices <- network_input %>%
+  distinct(barcode, Bcell_type) %>%
+  rename(name = barcode)
+
+# Create graph
+g <- graph_from_data_frame(edges, vertices = vertices, directed = FALSE)
+
+# Remove tiny isolated components (<2 nodes)
+g <- delete_vertices(g, which(components(g)$csize < 2))
+
+# Plot
+p <- ggraph(g, layout = "fr") +
+  geom_edge_link(alpha = 0.2, color = "gray60") +
+  geom_node_point(aes(color = Bcell_type), size = 3) +
+  theme_void() +
+  labs(title = "BCR Clonal Network (CDR3-Identical Cells)") +
+  theme(legend.position = "right")
+
+# Save
+ggsave("D:/MG-scRNAseq_BCR/figures/BCR_clonal_network.png", p, width = 10, height = 8)
+
+# Optional: Save network as CSV
+edge_df <- as_data_frame(g, what = "edges")
+write.csv(edge_df, "D:/MG-scRNAseq_BCR/results/tables/BCR_clonal_network_edges.csv", row.names = FALSE)
+
+```

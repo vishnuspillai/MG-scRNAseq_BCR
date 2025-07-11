@@ -1,0 +1,73 @@
+```{r}
+#| label: Preprocess combined_BCR
+library(Platypus)
+
+# Step 1: Flatten all samples into one dataframe
+bcr_df <- do.call(rbind, contig_list)
+
+# Step 2: Keep only heavy chains and valid cells
+bcr_df <- bcr_df[bcr_df$chain == "IGH", ]
+bcr_df <- bcr_df[!is.na(bcr_df$cdr3_nt) & !duplicated(bcr_df$barcode), ]
+
+# Step 3: Add clone size and B cell type from Seurat
+bcr_df$clone_size <- b_cells$clone_size[match(bcr_df$barcode, colnames(b_cells))]
+bcr_df$Bcell_type <- b_cells$Bcell_type[match(bcr_df$barcode, colnames(b_cells))]
+
+# Step 4: Filter expanded clones (size ≥ 3)
+expanded <- bcr_df[which(bcr_df$clone_size >= 3), ]
+
+```
+
+```{r}
+install.packages("ape")
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+BiocManager::install(c("Biostrings", "ggtree"))
+
+```
+
+
+```{r}
+library(pwalign)     # 🧬 For stringDist()
+library(Biostrings)  # For DNAStringSet
+library(ape)         # For tree generation
+library(ggtree)      # For plotting
+library(ggplot2)     # Required for ggtitle()
+
+# Create output folder
+out_dir <- "D:/MG-scRNAseq_BCR/figures/lineage_trees"
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Top 5 expanded clones
+top_clones <- names(sort(table(expanded$raw_clonotype_id), decreasing = TRUE))[1:5]
+
+for (clone_id in top_clones) {
+  sub <- expanded[expanded$raw_clonotype_id == clone_id, ]
+  
+  if (nrow(sub) >= 3) {
+    seqs <- DNAStringSet(sub$cdr3_nt)
+    names(seqs) <- sub$barcode
+
+    # ✅ Use Levenshtein (edit distance) via pwalign
+    dist_mat <- pwalign::stringDist(seqs, method = "levenshtein")
+    dist_matrix <- as.matrix(dist_mat)
+
+    # Build tree
+    tree <- nj(as.dist(dist_matrix))
+
+    # Plot and save
+    p <- ggtree(tree) +
+      geom_tiplab(size = 2) +
+      ggtitle(paste("CDR3 Lineage Tree:", clone_id))
+
+    ggsave(
+      filename = file.path(out_dir, paste0("lineage_tree_", clone_id, ".png")),
+      plot = p,
+      width = 8, height = 6
+    )
+  }
+}
+
+
+
+```
+

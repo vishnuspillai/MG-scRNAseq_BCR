@@ -1,0 +1,102 @@
+```{r}
+# ========================
+# STEP 7: Clone Sharing Across Samples
+# Author: Vishnu S. Pillai
+# ========================
+
+library(tidyverse)
+library(reshape2)
+library(UpSetR)
+library(igraph)
+library(ggraph)
+library(pheatmap)
+
+#-----------------------------------
+# 1. PREPARE: Clone Table
+#-----------------------------------
+
+# Assuming `expanded` contains: barcode, sample_id, raw_clonotype_id, clone_size
+clone_map <- expanded %>%
+  filter(!is.na(raw_clonotype_id)) %>%
+  distinct(sample_id, raw_clonotype_id)
+
+#-----------------------------------
+# 2. Clonotype Sharing Matrix (Heatmap)
+#-----------------------------------
+
+clone_matrix <- table(clone_map$raw_clonotype_id, clone_map$sample_id)
+clone_overlap <- crossprod(clone_matrix > 0)
+
+# Save heatmap
+png("D:/MG-scRNAseq_BCR/figures/clones/BCR_clone_sharing_heatmap.png", width=1000, height=800)
+pheatmap::pheatmap(clone_overlap, 
+                   display_numbers = TRUE, 
+                   cluster_rows = FALSE, 
+                   cluster_cols = FALSE,
+                   main = "Shared BCR Clonotypes Between Patients")
+dev.off()
+
+# Save numeric matrix
+clone_overlap_df <- as.data.frame(as.table(clone_overlap))
+colnames(clone_overlap_df) <- c("Sample1", "Sample2", "SharedClones")
+
+write.csv(clone_overlap_df,
+          "D:/MG-scRNAseq_BCR/results/tables/BCR_clonotype_sharing_matrix.csv",
+          row.names = FALSE)
+
+
+#-----------------------------------
+# 3. UpSet Plot of Expanded Clones
+#-----------------------------------
+
+expanded_clones <- expanded %>%
+  filter(clone_size > 1) %>%
+  distinct(sample_id, raw_clonotype_id)
+
+# Create list input for UpSetR
+clone_list <- split(expanded_clones$raw_clonotype_id, expanded_clones$sample_id)
+
+# Convert to UpSet format
+upset_input <- fromList(clone_list)
+
+# Plot
+png("D:/MG-scRNAseq_BCR/figures/clones/BCR_clone_upset_plot.png", width=1200, height=800)
+if (length(clone_list) >= 2) {
+  upset(upset_input,
+        order.by = "freq",
+        main.bar.color = "#3E4A89",
+        sets.bar.color = "#E66100")
+} else {
+  plot.new()
+  title("⚠️ Not enough subtypes with GO terms to generate UpSet plot.")
+}
+dev.off()
+
+
+#-----------------------------------
+# 4. Clone Sharing Network
+#-----------------------------------
+
+# Filter valid edges only (avoid duplicate self-loops and 0s)
+edge_df <- clone_overlap_df %>%
+  filter(Sample1 != Sample2 & SharedClones > 0)
+
+# Build graph
+g <- graph_from_data_frame(edge_df, directed = FALSE)
+
+# Plot network graph
+png("D:/MG-scRNAseq_BCR/figures/clones/BCR_clone_network_graph.png", width=1000, height=800)
+ggraph(g, layout = "fr") +
+  geom_edge_link(aes(width = SharedClones), color = "darkblue", alpha = 0.6) +
+  geom_node_point(size = 8, color = "tomato") +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void() +
+  ggtitle("Shared BCR Clones Between Samples")
+dev.off()
+
+# Save cleaned edge list
+write.csv(edge_df,
+          "D:/MG-scRNAseq_BCR/results/tables/BCR_clonal_network_edges.csv",
+          row.names = FALSE)
+
+```

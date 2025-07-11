@@ -1,0 +1,41 @@
+```{r}
+install.packages("UpSetR")
+```
+
+```{r}
+library(tidyverse)
+library(UpSetR)
+
+# Directory containing GO enrichment tables
+go_dir <- "D:/MG-scRNAseq_BCR/results/tables/"
+go_files <- list.files(go_dir, pattern = "^GO_BP_.*\\.csv$", full.names = TRUE)
+
+# Prepare cleaned term list
+term_lists <- list()
+
+for (f in go_files) {
+  df <- tryCatch(read.csv(f), error = function(e) NULL)
+  if (!is.null(df) && nrow(df) > 0) {
+    subtype <- gsub("^GO_BP_|\\.csv$", "", basename(f))
+    clean_terms <- df$term_name %>% 
+      as.character() %>% 
+      na.omit() %>% 
+      unique()
+    term_lists[[subtype]] <- clean_terms
+  }
+}
+
+# ⚠️ Ensure no nested lists or data frames
+if (length(term_lists) >= 2) {
+  upset_input <- fromList(term_lists)
+
+  # Plot
+  png("D:/MG-scRNAseq_BCR/figures/GO_BP_term_upset.png", width = 1200, height = 800)
+  upset(upset_input, order.by = "freq", main.bar.color = "#333399")
+  dev.off()
+} else {
+  message("⚠️ Not enough subtypes with GO terms to generate UpSet plot.")
+}
+
+
+```

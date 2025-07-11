@@ -1,0 +1,63 @@
+```{r}
+library(Seurat)
+library(tidyverse)
+library(ggplot2)
+
+#------------------------------
+# 1. Clone Size Calculation
+#------------------------------
+
+# Count how many cells share each clone ID
+clone_sizes <- table(b_cells$raw_clonotype_id)
+clone_sizes <- sort(clone_sizes, decreasing = TRUE)
+
+# Tag clone size back to cells
+# Confirm "clone_size" is numeric
+b_cells$clone_size <- as.numeric(b_cells$clone_size)
+b_cells$clone_size[is.na(b_cells$clone_size)] <- 0
+
+# Plot using FeaturePlot
+p_clone_umap <- FeaturePlot(
+  b_cells,
+  features = "clone_size",
+  reduction = "umap",
+  pt.size = 1.2,
+  cols = c("gray90", "#440154", "#21908d", "#CF1020")
+) + 
+ggtitle("Clone Size per B Cell")
+
+# Save it
+ggsave("D:/MG-scRNAseq_BCR/figures/clones/clone_size_umap.png", p_clone_umap, width = 8, height = 6)
+
+
+#------------------------------
+# 3. Summary per B Cell Type
+#------------------------------
+# Count unique clones, total cells, and max clone size per subtype
+clone_stats_df <- b_cells@meta.data %>%
+  group_by(Bcell_type) %>%
+  summarise(
+    unique_clones = n_distinct(raw_clonotype_id[!is.na(raw_clonotype_id)]),
+    total_cells = n(),
+    max_clone_size = max(clone_size, na.rm = TRUE)
+  ) %>%
+  arrange(desc(max_clone_size))
+
+write.csv(
+  clone_stats_df,
+  "D:/MG-scRNAseq_BCR/results/tables/Bcell_clonal_expansion_summary.csv",
+  row.names = FALSE
+)
+
+#------------------------------
+# 4. Barplot of Clones per Subtype
+#------------------------------
+p_clone_bar <- ggplot(clone_stats_df, aes(x = reorder(Bcell_type, -unique_clones), y = unique_clones)) +
+  geom_col(fill = "#0d6efd") +
+  geom_text(aes(label = unique_clones), vjust = -0.5, size = 3) +
+  labs(title = "Unique Clones per B Cell Type", x = "B Cell Type", y = "Unique Clones") +
+  theme_minimal()
+p_clone_bar
+ggsave("D:/MG-scRNAseq_BCR/figures/clones/clone_distribution_barplot.png", p_clone_bar, width = 7, height = 5)
+
+```

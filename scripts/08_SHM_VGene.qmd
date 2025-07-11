@@ -1,0 +1,32 @@
+```{r}
+#| label: V GENE Plots
+library(dplyr)
+library(ggplot2)
+
+# Clean V-gene column (remove allele suffix)
+expanded_clean <- expanded %>%
+  mutate(v_gene_short = gsub("\\*.*", "", v_gene)) %>%
+  filter(!is.na(Bcell_type), Bcell_type != "", v_gene_short != "")
+
+# Count v_gene usage per Bcell_type
+v_gene_counts <- expanded_clean %>%
+  group_by(Bcell_type, v_gene_short) %>%
+  summarise(count = n(), .groups = 'drop')
+
+# Normalize to frequency
+v_gene_freq <- v_gene_counts %>%
+  group_by(Bcell_type) %>%
+  mutate(freq = count / sum(count))
+
+# Plot: Faceted barplot
+p <- ggplot(v_gene_freq, aes(x = reorder(v_gene_short, -freq), y = freq, fill = Bcell_type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Bcell_type, scales = "free_x") +
+  theme_minimal(base_size = 12) +
+  labs(title = "V-Gene Usage by B Cell Subtype", x = "V Gene", y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Save plot
+ggsave("D:/MG-scRNAseq_BCR/figures/vgene_usage_by_subtype.png", p, width = 12, height = 8)
+
+```
