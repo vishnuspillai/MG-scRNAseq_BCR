@@ -1,25 +1,63 @@
----
-title: "02_clone_DE_analysis"
-format: html
----
-
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
-1 + 1
+# ===========================
+# STEP 3: Clone-driven DEGs
+# Author: Vishnu S. Pillai
+# ===========================
+
+library(Seurat)
+library(dplyr)
+
+#---------------------------
+# 1. Load Seurat Object
+#---------------------------
+b_cells <- readRDS("D:/MG-scRNAseq_BCR/results/Bcells_clonemapped_seurat_obj.rds")
+
+#---------------------------
+# 2. Tag Clone Expansion
+#---------------------------
+top_clones <- c("clonotype2", "clonotype1", "clonotype3", "clonotype4", 
+                "clonotype6", "clonotype13", "clonotype17", 
+                "clonotype7", "clonotype18")
+
+b_cells$CloneStatus <- ifelse(
+  b_cells$raw_clonotype_id %in% top_clones,
+  "Expanded",
+  "Unique"
+)
+
+# Save updated Seurat object
+saveRDS(b_cells, "D:/MG-scRNAseq_BCR/results/Bcells_clonemapped_cloneStatus.rds")
+
+#---------------------------
+# 3. DE per Bcell Subtype
+#---------------------------
+Idents(b_cells) <- "CloneStatus"
+
+bcell_types <- unique(b_cells$Bcell_type)
+
+dir.create("D:/MG-scRNAseq_BCR/results/degs_by_clone", recursive = TRUE, showWarnings = FALSE)
+
+for (type in bcell_types) {
+  subset_b <- subset(b_cells, subset = Bcell_type == type)
+  
+  if (length(unique(subset_b$CloneStatus)) == 2) {
+    degs <- FindMarkers(
+      subset_b,
+      ident.1 = "Expanded",
+      ident.2 = "Unique",
+      logfc.threshold = 0.25,
+      min.pct = 0.1,
+      test.use = "wilcox"
+    )
+    
+    write.csv(
+      degs,
+      file = paste0("D:/MG-scRNAseq_BCR/results/degs_by_clone/DEGs_", gsub(" ", "_", type), ".csv"),
+      row.names = TRUE
+    )
+  }
+}
+
+
 ```
 
-You can add options to executable code like this
-
-```{r}
-#| echo: false
-2 * 2
-```
-
-The `echo: false` option disables the printing of code (only output is displayed).
