@@ -34,47 +34,77 @@ MG-scRNAseq_BCR/
 
 ---
 
-## 🧪 Analysis Pipeline
-
-### ✅ Step 1: B cell Subclustering
-- Input: `.h5` files from 10x
-- Tools: `Seurat`, `tidyverse`
-- Output:
-  - Clustered and normalized Seurat object
-  - DE marker identification
-  - Manual annotation into B cell subtypes
-
-### ✅ Step 2: BCR Clone Mapping
-- Input: `filtered_contig_annotations.csv` per sample
-- Tools: `scRepertoire`, `Seurat`
-- Output:
-  - Clone overlay on UMAP
-  - Clonal expansion statistics per subtype
-
-### 🔄 Step 3: [Upcoming]
-- B cell lineage inference and clone tracking
-- Pseudotime integration (optional)
-- Cross-patient clone overlap analysis
 
 ---
 
-## 📚 Key Technologies
+## 🔄 Workflow Summary
 
-- `Seurat` v5 (H5-based layering system)
-- `scRepertoire` for BCR processing
-- `ggplot2`, `dplyr`, `cowplot`, `patchwork`
-- File-safe coding with fixed directories
+### 1️⃣ **Seurat Preprocessing**
+- Input: CD45⁺ thymic B cells from GSE233180.
+- Filters applied, clusters identified, and `Bcell_type` assigned using marker-based annotation.
+- Output: `Bcells_annotated_seurat_obj.rds`
+
+### 2️⃣ **BCR Integration via Platypus**
+- 12 BCR CSVs parsed from GEO.
+- Barcode cleaning, sample naming standardized.
+- `combineBCR()` and `VDJ_df` merged with Seurat object.
+- Clonotypes stored under `raw_clonotype_id`, `clone_size`.
+
+### 3️⃣ **Clonal Overlay and Expansion**
+- Clonotype UMAP overlay based on `clone_size`.
+- Expansion statistics by B cell subtype saved to CSV.
+
+### 4️⃣ **Differential Gene Expression (DEG)**
+- DEGs between **Expanded vs Unique clones** for each `Bcell_type`.
+- Top 10 genes used for expression heatmaps.
+- DEG CSVs saved per subtype.
+
+### 5️⃣ **GO Enrichment Analysis (gProfiler2)**
+- GO:BP terms retrieved for upregulated DEGs using `gost()`.
+- Barplots and CSVs generated per B cell subtype.
+
+### 6️⃣ **V Gene Usage & SHM Entropy**
+- Plots for top V genes per subtype and shared VJ usage matrix.
+- SHM entropy calculated across subtypes.
+- All results saved in `results/tables/` and `figures/v_gene/`.
+
+### 7️⃣ **Clonal Sharing Analysis**
+- Clonotype overlap matrix → heatmap.
+- UpSet plot for expanded clones across samples.
+- Graph network using `igraph` and `ggraph`.
 
 ---
 
-## 🧠 Author
+## 📦 Dataset Details
+
+- **GEO Accession**: [GSE233180](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE233180)
+- **Patients**: 12 EOMG (AChR+), 10 females, 2 males.
+- **Modality**: 10x Genomics V(D)J + GEX (5′)
+
+---
+
+## 🧠 Future Directions
+
+- [ ] Clonotype-specific marker discovery (`FindMarkers` per top clone)
+- [ ] Pseudotime trajectory (Slingshot or Monocle)
+- [ ] TCR integration (if dataset permits)
+- [ ] Report/Quarto rendering
+
+---
+
+## 👨‍🔬 Author
 
 **Vishnu S. Pillai**  
-Bioinformatician, Single Cell + Immunology + Epigentics 
-📍 Kerala, India  
-🧬 GitHub: [@vishnuspillai](https://github.com/vishnuspillai)
+Bioinformatician | Immunogenomics | AI for Biology  
+🔗 [GitHub](https://github.com/vishnuspillai)
 
 ---
+
+## 📜 Citation
+
+If you use this pipeline or refer to its results, please cite the corresponding GEO dataset (GSE233180) and acknowledge this repository.
+
+
 
 ## 📄 License
 
